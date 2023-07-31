@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-# coding: utf-8
-# @Author  : Xinhao Mei @CVSSP, University of Surrey
-# @E-mail  : x.mei@surrey.ac.uk
-
-
 import torch
 import random
 import numpy as np
@@ -21,6 +15,7 @@ class AudioCaptionDataset(Dataset):
             dataset: 'AudioCaps', 'Clotho
             split: 'train', 'val', 'test'
         """
+        
         super(AudioCaptionDataset, self).__init__()
         self.dataset = dataset
         self.split = split
@@ -53,7 +48,6 @@ class AudioCaptionDataset(Dataset):
                 # [cap_1, cap_2, ..., cap_5]
 
                
-
     def __len__(self):
         return len(self.audio_keys) * self.num_captions_per_audio
 
@@ -123,5 +117,4 @@ def get_dataloader(split, config):
                       drop_last=drop_last,
                       num_workers=config.data.num_workers,
                       collate_fn=collate_fn)
-
 
