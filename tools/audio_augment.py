@@ -159,7 +159,8 @@ def augment_raw_audio(dataset, train_meta_dict):
 
         #using torchaudio.load
         audio, sr = librosa.load(train_audio_dir + audio_name, sr=sampling_rate, mono=True)
-        audio, audio_length = pad_or_truncate(audio, max_audio_length)
+        #audio, audio_length = pad_or_truncate(audio, max_audio_length)
+        #-> apply it later
                                  
         audio_trans = torch.Tensor(audio.reshape(1,-1))
         
