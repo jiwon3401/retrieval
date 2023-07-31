@@ -20,6 +20,11 @@ import matplotlib.pyplot as plt
 
 import math
 import pathlib
+from tqdm import tqdm
+import soundfile as sf
+
+from tools.dataset import load_metadata, pad_or_truncate, _create_vocabulary, _sentence_process
+
 
 
 #raw audio augmentation
@@ -109,6 +114,7 @@ class RandomBackgroundNoise:
         return (scale * audio_data + noise ) / 2
 
 
+    
 
 class ComposeTransform:
     def __init__(self, transforms):
@@ -119,23 +125,64 @@ class ComposeTransform:
             audio_data = t(audio_data)
         return audio_data
 
+    
 
-# compose_transform = ComposeTransform([
-#     RandomClip(sample_rate=sampling_rate, clip_length=64000),
-#     RandomSpeedChange(sampling_rate),
-#     RandomBackgroundNoise(sampling_rate, './data/musan/noise')])
-
-
-
+compose_transform = ComposeTransform([
+    RandomClip(sample_rate=sampling_rate, clip_length=64000),
+    RandomSpeedChange(sampling_rate),
+    RandomBackgroundNoise(sampling_rate, './data/musan/noise')])
 
 
 
+#path 지정
+data_path = '/home/clim-lab/바탕화면/main_drive/jiwon/retrieval/data/Clotho'
+csv_path = os.path.join(data_path, 'csv_files/')
+train_csv_path = os.path.join(csv_path, 'train.csv')
+train_audio_dir = os.path.join(data_path, 'waveforms/train/')
+train_hdf5_path = os.path.join(data_path, 'hdf5s/train/train.h5')
+dataset='Clotho'
+train_meta_dict = load_metadata(dataset, train_csv_path)
 
+
+
+def augment_raw_audio(dataset, train_meta_dict):
+    '''
+    making raw audio augmentation using randomclip, randomnoise, randomspeedchange
+    file saved in './data/Clotho/waveforms/
+    '''
+
+    output_augment_path = os.path.join(data_path, 'waveforms/train_augment')
+    audio_nums = len(train_meta_dict['audio_name'])
+
+    for i in tqdm(range(audio_nums)):
+        audio_name = train_meta_dict['audio_name'][i]
+
+        #using torchaudio.load
+        audio, sr = librosa.load(train_audio_dir + audio_name, sr=sampling_rate, mono=True)
+        audio, audio_length = pad_or_truncate(audio, max_audio_length)
+                                 
+        audio_trans = torch.Tensor(audio.reshape(1,-1))
+        
+        new_filename = audio_name[:-4] + '_aug.wav'
+        output_path = os.path.join(output_augment_path, new_filename)
+
+
+        #audio augmentation 3가지 방법 모두 적용
+        transformed_audio = compose_transform(audio_trans)
+        transformed_audio_numpy = transformed_audio.numpy()[0] 
+        #torchaudio.load() returns a 2-dimensional tensor, select the first channel.
+
+        sf.write(output_path, transformed_audio_numpy, 32000, format='WAV')
+        
+        
+
+        
+##################################################################################
 #Specaugment-> applied directly to the feature inputs of a neural network.
 #from torchlibrosa.augmentation import SpecAugmentation
 def spec_augment(spec: np.ndarray, num_mask=2, 
                  freq_masking_max_percentage=0.15, time_masking_max_percentage=0.3):
-
+    
     spec = spec.copy()
     for i in range(num_mask):
         all_frames_num, all_freqs_num = spec.shape

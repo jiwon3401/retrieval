@@ -4,5 +4,5 @@ from loguru import logger
 
 if __name__ == '__main__':
     logger.info('Creating Clotho augmentation files...')
-    augment_raw_audio(dataset, train_meta_dict)
+    #augment_raw_audio(dataset, train_meta_dict)
     logger.info('Creating raw audio DONE!')
