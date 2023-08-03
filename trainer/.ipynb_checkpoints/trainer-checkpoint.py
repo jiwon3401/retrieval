@@ -101,13 +101,14 @@ def train(config):
     elif config.training.loss == 'infonce+vicreg':
         criterion = InfoNCE_VICReg(info_weight=1,vic_weight=0.4)
         
-    elif config.training.loss == 'bidirect': #'contrastive'??
+    elif config.training.loss == 'bidirect': 
         criterion = BiDirectionalRankingLoss(margin=config.training.margin)
 
 
 
     # set up data loaders
     train_loader = get_dataloader('train', config)
+    #train_loader = get_dataloader('train_augment', config)
     val_loader = get_dataloader('val', config)
     test_loader = get_dataloader('test', config)
 
@@ -158,7 +159,9 @@ def train(config):
         writer.add_scalar('train/loss', epoch_loss.avg, epoch)
 
         elapsed_time = time.time() - start_time
-
+        
+        
+        
         # validation loop, validation after each epoch
         main_logger.info("Validating...")
         r1, r5, r10, mAP10, medr, meanr, val_loss = validate(val_loader, model, device, criterion=criterion)
@@ -189,25 +192,32 @@ def train(config):
         main_logger.info(f'Training statistics:\tloss for epoch [{epoch}]: {epoch_loss.avg:.3f},'
                          f'\ttime: {elapsed_time:.1f}, lr: {current_lr:.6f}.')
 
+
     # Training done, evaluate on evaluation set
     main_logger.info('Training done. Start evaluating.')
     best_checkpoint = torch.load(str(model_output_dir) + '/best_model.pth')
     model.load_state_dict(best_checkpoint['model'])
     best_epoch = best_checkpoint['epoch']
     main_logger.info(f'Best checkpoint occurred in {best_epoch} th epoch.')
+    
     validate(test_loader, model, device)
     main_logger.info('Evaluation done.')
     writer.close()
 
+
+    
 @torch.no_grad()
 def validate(data_loader, model, device, criterion=None):
 
     val_logger = logger.bind(indent=1)
     model.eval()
-    val_loss = AverageMeter()
+    #val_loss = AverageMeter()
+
     with torch.no_grad():
         # numpy array to keep all embeddings in the dataset
         audio_embs, cap_embs = None, None
+        
+        val_loss = AverageMeter()
 
         for i, batch_data in tqdm(enumerate(data_loader), total=len(data_loader)):
             audios, captions, audio_ids, indexs = batch_data
@@ -228,7 +238,10 @@ def validate(data_loader, model, device, criterion=None):
             audio_embs[indexs] = audio_embeds.cpu().numpy()
             cap_embs[indexs] = caption_embeds.cpu().numpy()
 
-        val_logger.info(f'Validation loss: {val_loss.avg :.3f}')
+        
+        val_logger.info(f'Validation loss: {val_loss.avg :.3f}') #여기 수정해야함!
+        
+        
         # evaluate text to audio retrieval
         r1, r5, r10, mAP10, medr, meanr = t2a(audio_embs, cap_embs)
 

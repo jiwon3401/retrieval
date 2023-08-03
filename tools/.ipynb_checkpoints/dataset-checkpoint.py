@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-# coding: utf-8
-# @Author  : Xinhao Mei @CVSSP, University of Surrey
-# @E-mail  : x.mei@surrey.ac.uk
-
 import time
 from itertools import chain
 
@@ -14,6 +9,10 @@ from loguru import logger
 from pathlib import Path
 from tqdm import tqdm
 from tools.file_io import load_csv_file, write_pickle_file
+
+#from tools.audio_augment import spec_augment
+#from audio_augmentations import *
+
 
 
 def load_metadata(dataset, csv_file):
@@ -33,6 +32,7 @@ def load_metadata(dataset, csv_file):
         audio_name = item['file_name']
         if caption_field is not None:
             item_captions = [_sentence_process(item[cap_ind], add_specials=False) for cap_ind in caption_field]
+            # csv file 정제 -> lowercase, 
         else:
             item_captions = _sentence_process(item['caption'])
         audio_names.append(audio_name)
@@ -92,8 +92,9 @@ def pack_dataset_to_hdf5(dataset):
                 all_captions.extend(meta_dict['captions'])
 
         start_time = time.time()
+        
 
-        with h5py.File(h df5_path+'{}.h5'.format(split), 'w') as hf:
+        with h5py.File(hdf5_path+'{}.h5'.format(split), 'w') as hf:
 
             hf.create_dataset('audio_name', shape=(audio_nums,), dtype=h5py.special_dtype(vlen=str))
             hf.create_dataset('audio_length', shape=(audio_nums,), dtype=np.uint32)
@@ -101,7 +102,8 @@ def pack_dataset_to_hdf5(dataset):
 
             if split == 'train' and dataset == 'AudioCaps':
                 hf.create_dataset('caption', shape=(audio_nums,), dtype=h5py.special_dtype(vlen=str))
-            else:
+            
+            else: #'clotho dataset'
                 hf.create_dataset('caption', shape=(audio_nums, 5), dtype=h5py.special_dtype(vlen=str))
 
             for i in tqdm(range(audio_nums)):
@@ -109,6 +111,8 @@ def pack_dataset_to_hdf5(dataset):
 
                 audio, _ = librosa.load(audio_dir + audio_name, sr=sampling_rate, mono=True)
                 audio, audio_length = pad_or_truncate(audio, max_audio_length)
+
+
 
                 hf['audio_name'][i] = audio_name.encode()
                 hf['audio_length'][i] = audio_length
@@ -125,6 +129,7 @@ def pack_dataset_to_hdf5(dataset):
     
     logger.info(f'Creating vocabulary: {len(words_list)} tokens!')
     write_pickle_file(words_list, 'data/{}/pickles/words_list.p'.format(dataset))
+
 
 
 def _create_vocabulary(captions):
@@ -169,3 +174,5 @@ def pad_or_truncate(x, audio_length):
         return np.concatenate((x, np.zeros(audio_length - length)), axis=0), length
     else:
         return x[:audio_length], audio_length
+
+    

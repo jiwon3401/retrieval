@@ -15,34 +15,29 @@ from sentence_transformers import SentenceTransformer
 from models.BERT_Config import MODELS
 
 
-import math
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-
-import lightning.pytorch as pl
-from sentence_transformers import SentenceTransformer
-
-
 
 class SenBERTEncoder(nn.Module):
     def __init__(self, config):
         super(SenBERTEncoder, self).__init__()
         
+        # bert_type = config.bert_encoder.type #settings.yaml에서 'sentence-transformers/all-MiniLM-L6-v2' 로 바꿔야함 ㄴㄴ
         dropout = 0.1
         
-        self.tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-mpnet-base-v2') 
-        self.bert_encoder = AutoModel.from_pretrained('sentence-transformers/all-mpnet-base-v2', add_pooling_layer = False) #pooling_layer 제외
+        self.tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
+        self.bert_encoder = AutoModel.from_pretrained('sentence-transformers/bert-base-nli-mean-tokens', add_pooling_layer = False) #pooling_layer 제외
         
         self.text_width = 768
         
-
-        for name, param in self.bert_encoder.named_parameters():
-            param.requires_grad = False
-#         else:
-#             for name, param in self.bert_encoder.named_parameters():
-#                 param.requires_grad = True
+        '''
+        freeze = True
+        if freeze:
+        '''
+        if config.training.freeze:
+            for name, param in self.bert_encoder.named_parameters():
+                param.requires_grad = False
+        else:
+            for name, param in self.bert_encoder.named_parameters():
+                param.requires_grad = True
                 
         
     def forward(self, caption):
@@ -58,6 +53,13 @@ class SenBERTEncoder(nn.Module):
         cls = text_output[:,0,:]
         
         return cls
+                                
+        
+        
+
+#         self.tokenizer = AutoTokenizer.from_pretrained()
+#         self.model = AutoModel.from_pretrained('sentence-transformers/all-mpnet-base-v2')
+        
     
 
 '''
