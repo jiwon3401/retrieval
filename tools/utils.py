@@ -140,7 +140,8 @@ def t2a(audio_embs, cap_embs, return_ranks=False):
     audios = np.array([audio_embs[i]for i in range(0, audio_embs.shape[0], 5)])
 
     ranks = np.zeros(5 * num_audios)
-    top10 = np.zeros([5 * num_audios,5])
+    top1 = np.zeros(5 * num_audios)
+    top10 = np.zeros([5 * num_audios, 10])
 
     for index in range(num_audios):
 
@@ -155,6 +156,7 @@ def t2a(audio_embs, cap_embs, return_ranks=False):
         for i in range(len(inds)):
             inds[i] = np.argsort(d[i])[::-1]
             ranks[5 * index + i] = np.where(inds[i] == index)[0][0]
+            top1[5 * index + i] = inds[i][0]
             top10[5 * index + i] = inds[i][0:10]
 
     # compute metrics
@@ -163,7 +165,6 @@ def t2a(audio_embs, cap_embs, return_ranks=False):
     r10 = 100.0 * len(np.where(ranks < 10)[0]) / len(ranks)
     r50 = 100.0 * len(np.where(ranks < 50)[0]) / len(ranks)
     mAP10 = 100.0 * np.sum(1 / (ranks[np.where(ranks < 10)[0]] + 1)) / len(ranks)
-    
     medr = np.floor(np.median(ranks)) + 1
     meanr = ranks.mean() + 1
     if return_ranks:
