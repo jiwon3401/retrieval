@@ -8,7 +8,7 @@ from torch.utils.data.dataloader import DataLoader
 
 class AudioCaptionDataset(Dataset):
 
-    def __init__(self, dataset='Clotho', split='train'):
+    def __init__(self, dataset='Clotho', split='train'): #split='train_augment'
         """
         load audio clip's waveform and corresponding caption
         Args:
@@ -31,9 +31,22 @@ class AudioCaptionDataset(Dataset):
                 self.captions = [caption.decode() for caption in hf['caption'][:]]
          
     
+        elif split == 'train_augment':
+            self.is_train = False 
+            self.num_captions_per_audio = 5
+            
+            with h5py.File(self.h5_path, 'r') as hf:
+                self.audio_keys = [audio_name.decode() for audio_name in hf['audio_name'][:]]
+                # audio_names: [str] -> decode()처리해줘서 string
+                
+                self.captions = [caption for caption in hf['caption'][:]]
+                
+                if dataset == 'Clotho':
+                    self.audio_lengths = [length for length in hf['audio_length'][:]]
+                # [cap_1, cap_2, ..., cap_5]
+                
         else:
-            self.is_train = False #여기에서 오류뜬거같음....
-            #self.is_train = True
+            self.is_train = False 
             self.num_captions_per_audio = 5
             
             with h5py.File(self.h5_path, 'r') as hf:
@@ -105,6 +118,10 @@ def collate_fn(batch_data):
 def get_dataloader(split, config):
     dataset = AudioCaptionDataset(config.dataset, split)
     if split == 'train':
+        shuffle = True
+        drop_last = True
+        
+    elif split == 'train_augment':
         shuffle = True
         drop_last = True
     else:
