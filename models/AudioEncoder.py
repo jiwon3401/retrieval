@@ -6,7 +6,7 @@ https://github.com/qiuqiangkong/audioset_tagging_cnn/blob/master/pytorch/models.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchlibrosa.stft import Spectrogramk, LogmelFilterBank
+from torchlibrosa.stft import Spectrogram, LogmelFilterBank
 from torchlibrosa.augmentation import SpecAugmentation
 import random
 import os
