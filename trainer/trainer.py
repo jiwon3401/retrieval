@@ -200,14 +200,14 @@ def train(config):
     best_epoch = best_checkpoint['epoch']
     main_logger.info(f'Best checkpoint occurred in {best_epoch} th epoch.')
     
-    validate(test_loader, model, device)
+    validate(test_loader, model, device, criterion)
     main_logger.info('Evaluation done.')
     writer.close()
 
 
     
 @torch.no_grad()
-def validate(data_loader, model, device, criterion=None):
+def validate(data_loader, model, device, criterion):
 
     val_logger = logger.bind(indent=1)
     model.eval()
