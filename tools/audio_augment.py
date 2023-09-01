@@ -126,6 +126,7 @@ class ComposeTransform:
         return audio_data
 
     
+sampling_rate=32000
 
 compose_transform = ComposeTransform([
     RandomClip(sample_rate=sampling_rate, clip_length=64000),
