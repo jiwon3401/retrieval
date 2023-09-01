@@ -124,6 +124,7 @@ def get_dataloader(split, config):
     elif split == 'train_augment':
         shuffle = True
         drop_last = True
+        
     else:
         shuffle = False
         drop_last = False
