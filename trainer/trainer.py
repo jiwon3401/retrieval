@@ -12,28 +12,13 @@ import torch.nn as nn
 #from parallel import DataParallelModel, DataParallelCriterion
 from torch.utils.tensorboard import SummaryWriter
 from tools.utils import setup_seed, AverageMeter, a2t, t2a
-from tools.loss import BiDirectionalRankingLoss, TripletLoss, NTXent, WeightTriplet
 from models.ASE_model import ASE
 from data_handling.DataLoader import get_dataloader
 import wandb
 from tensorboardX import SummaryWriter
-
-import platform
-import sys
-import time
-import numpy as np
-import torch
-from tqdm import tqdm
-from pathlib import Path
-from loguru import logger
-from pprint import PrettyPrinter
-from torch.utils.tensorboard import SummaryWriter
-from tools.utils import setup_seed, AverageMeter, a2t, t2a
 from tools.loss import BiDirectionalRankingLoss, WeightTriplet, TripletLoss, NTXent, VICReg, InfoNCE, InfoNCE_VICReg
 import pickle
 
-from models.ASE_model import ASE
-from data_handling.DataLoader import get_dataloader
 
 
 def train(config):
