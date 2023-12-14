@@ -1,13 +1,12 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# @Author  : Xinhao Mei @CVSSP, University of Surrey
-# @E-mail  : x.mei@surrey.ac.uk
+from __future__ import print_function
 
-"""
-Evaluation tools adapted from https://github.com/fartashf/vsepp/blob/master/evaluation.py
-"""
-
+import numpy
 import numpy as np
+import time
+from collections import OrderedDict
+
+import torch.nn.functional as F
+
 import torch
 import random
 from sentence_transformers import util
@@ -47,20 +46,47 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+        
+    def __str__(self):
+        """String representation for logging
+        """
+        # for values that should be recorded exactly e.g. iteration number
+        if self.count == 0:
+            return str(self.val)
+        # for stats
+        return '%.4f (%.4f)' % (self.val, self.avg)
 
 
-def align_word_embedding(words_list_path, model_path, nhid):
+  
+class LogCollector(object):
+    """A collection of logging objects that can change from train to val"""
 
-    words_list = load_pickle_file(words_list_path)
-    w2v_model = Word2Vec.load(model_path)
-    ntoken = len(words_list)
-    weights = np.zeros((ntoken, nhid))
-    for i, word in enumerate(words_list):
-        if word in w2v_model.wv.index_to_key:
-            embedding = w2v_model.wv[word]
-            weights[i] = embedding
-    weights = torch.from_numpy(weights).float()
-    return weights
+    def __init__(self):
+        # to keep the order of logged variables deterministic
+        self.meters = OrderedDict()
+
+    def update(self, k, v, n=0):
+        # create a new meter if previously not recorded
+        if k not in self.meters:
+            self.meters[k] = AverageMeter()
+        self.meters[k].update(v, n)
+
+    def __str__(self):
+        """Concatenate the meters in one log line
+        """
+        s = ''
+        for i, (k, v) in enumerate(self.meters.items()):
+            if i > 0:
+                s += '  '
+            s += k + ' ' + str(v)
+        return s
+
+    def tb_log(self, tb_logger, prefix='', step=None):
+        """Log using tensorboard
+        """
+        for k, v in self.meters.iteritems():
+            tb_logger.log_value(prefix + k, v.val, step=step) 
+
 
 
 def l2norm(X):
@@ -79,20 +105,14 @@ def a2t(audio_embs, cap_embs, return_ranks=False):
 
     ranks = np.zeros(num_audios)
     top1 = np.zeros(num_audios)
-    AP10 = np.zeros(num_audios)
-    
-    #mAP10 = np.zeros(num_audios)
-    
+    mAP10 = np.zeros(num_audios)
     for index in range(num_audios):
         # get query audio
-        audio = audio_embs[5*index]
-        #audio = audio_embs[5 * index].reshape(1, audio_embs.shape[1])
+        audio = audio_embs[5 * index].reshape(1, audio_embs.shape[1])
 
         # compute scores
-        # d = audio @ cap_embeds.T
         d = util.cos_sim(torch.Tensor(audio), torch.Tensor(cap_embs)).squeeze(0).numpy()
         inds = np.argsort(d)[::-1]
-        
         index_list.append(inds[0])
 
         inds_map = []
@@ -105,16 +125,10 @@ def a2t(audio_embs, cap_embs, return_ranks=False):
             if tmp < 10:
                 inds_map.append(tmp + 1)
         inds_map = np.sort(np.array(inds_map))
-        
-        #average precision
         if len(inds_map) != 0:
-            #mAP10[index] = np.sum((np.arange(1, len(inds_map) + 1) / inds_map)) / 5
-            AP10[index] = np.sum((np.arange(1, len(inds_map) + 1) / inds_map)) / 5
-
+            mAP10[index] = np.sum((np.arange(1, len(inds_map) + 1) / inds_map)) / 5
         else:
-            AP10[index] = 0.
-            #mAP10[index] = 0.
-            
+            mAP10[index] = 0.
         ranks[index] = rank
         top1[index] = inds[0]
     # compute metrics
@@ -122,15 +136,13 @@ def a2t(audio_embs, cap_embs, return_ranks=False):
     r5 = 100.0 * len(np.where(ranks < 5)[0]) / len(ranks)
     r10 = 100.0 * len(np.where(ranks < 10)[0]) / len(ranks)
     r50 = 100.0 * len(np.where(ranks < 50)[0]) / len(ranks)
-    mAP10 = 100.0 * np.sum(AP10) / len(ranks)
-    #mAP10 = 100.0 * np.sum(mAP10) / len(ranks)
-    
+    mAP10 = 100.0 * np.sum(mAP10) / len(ranks)
     medr = np.floor(np.median(ranks)) + 1
     meanr = ranks.mean() + 1
     if return_ranks:
-        return r1, r5, r10, mAP10, medr, meanr, ranks, top1
+        return r1, r5, r10, r50, mAP10, medr, meanr, ranks, top1
     else:
-        return r1, r5, r10, mAP10, medr, meanr
+        return r1, r5, r10, r50, mAP10, medr, meanr
 
 
 def t2a(audio_embs, cap_embs, return_ranks=False):
@@ -141,7 +153,6 @@ def t2a(audio_embs, cap_embs, return_ranks=False):
 
     ranks = np.zeros(5 * num_audios)
     top1 = np.zeros(5 * num_audios)
-    top10 = np.zeros([5 * num_audios, 10])
 
     for index in range(num_audios):
 
@@ -149,7 +160,6 @@ def t2a(audio_embs, cap_embs, return_ranks=False):
         queries = cap_embs[5 * index: 5 * index + 5]
 
         # compute scores
-        # queries @ audio.T
         d = util.cos_sim(torch.Tensor(queries), torch.Tensor(audios)).numpy()
 
         inds = np.zeros(d.shape)
@@ -157,7 +167,6 @@ def t2a(audio_embs, cap_embs, return_ranks=False):
             inds[i] = np.argsort(d[i])[::-1]
             ranks[5 * index + i] = np.where(inds[i] == index)[0][0]
             top1[5 * index + i] = inds[i][0]
-            top10[5 * index + i] = inds[i][0:10]
 
     # compute metrics
     r1 = 100.0 * len(np.where(ranks < 1)[0]) / len(ranks)
@@ -168,6 +177,6 @@ def t2a(audio_embs, cap_embs, return_ranks=False):
     medr = np.floor(np.median(ranks)) + 1
     meanr = ranks.mean() + 1
     if return_ranks:
-        return r1, r5, r10, mAP10, medr, meanr, ranks, top10
+        return r1, r5, r10, r50, mAP10, medr, meanr, ranks, top1
     else:
-        return r1, r5, r10, mAP10, medr, meanr
+        return r1, r5, r10, r50, mAP10, medr, meanr

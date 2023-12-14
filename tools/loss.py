@@ -3,86 +3,8 @@ import torch.nn as nn
 from sentence_transformers import util
 import torch.nn.functional as F
 
-class NTXent(nn.Module):
 
-    def __init__(self, temperature=0.07):
-        super(NTXent, self).__init__()
-        self.loss = nn.LogSoftmax(dim=1)
-        self.tau = temperature
-
-    def forward(self, audio_embeds, text_embeds, labels):
-
-        n = audio_embeds.shape[0]
-
-        a2t = util.cos_sim(audio_embeds, text_embeds) / self.tau
-        t2a = util.cos_sim(text_embeds, audio_embeds) / self.tau
-
-        mask = labels.expand(n, n).eq(labels.expand(n, n).t()).to(a2t.device)
-        mask_diag = mask.diag()
-        mask_diag = torch.diag_embed(mask_diag)
-        mask = mask ^ mask_diag
-
-        a2t_loss = - self.loss(a2t).masked_fill(mask, 0).diag().mean()
-        t2a_loss = - self.loss(t2a).masked_fill(mask, 0).diag().mean()
-        
-        '''
-        #a2t = util.cos_sim(audio_embeds, text_embeds) / self.tau
-        #t2a = util.cos_sim(text_embeds, audio_embeds) / self.tau
-        #t2a_loss = -self.loss(t2a).mean()
-        #a2t_loss = -self.loss(a2t).mean()
-        '''
-
-        loss = 0.5 * a2t_loss + 0.5 * t2a_loss
-
-        return loss
-
-
-
-
-class TripletLoss(nn.Module):
-
-    def __init__(self, margin=0.2):
-        super(TripletLoss, self).__init__()
-        self.margin = margin
-
-    def forward(self, audio_embeds, text_embeds, labels):
-        """
-
-        :param audio_embeds:
-        :param text_embeds:
-        :param labels:
-        :return:
-        """
-
-        n = audio_embeds.size(0)  # batch size
-
-        # dist = []
-        sim_a2t = util.cos_sim(audio_embeds, text_embeds)  # (batch_size, x batch_size)
-        sim_ap = torch.diag(sim_a2t).view(n, 1)
-        d1 = sim_ap.expand_as(sim_a2t)
-        d2 = sim_ap.t().expand_as(sim_a2t)
-
-        # compare every diagonal score to scores in its column
-        # caption retrieval
-        cost_s = F.relu(self.margin + sim_a2t - d1)
-        # compare every diagonal score to scores in its row
-        # audio retrieval
-        cost_a = F.relu(self.margin + sim_a2t - d2)
-
-        # clear diagonals
-        mask = labels.expand(n, n).eq(labels.expand(n, n).t()).to(cost_a.device)
-        cost_s = cost_s.masked_fill(mask, 0)
-        cost_a = cost_a.masked_fill(mask, 0)
-
-        cost_s = cost_s.max(1)[0]
-        cost_a = cost_a.max(0)[0]
-
-        loss = (cost_s.sum() + cost_a.sum()) / n
-
-        return loss
-
-
-class BiDirectionalRankingLoss(nn.Module):
+class BiDirectionalRankingLoss(nn.Module): #triplet-max
 
     def __init__(self, margin=0.2):
         super(BiDirectionalRankingLoss, self).__init__()
@@ -123,8 +45,7 @@ class BiDirectionalRankingLoss(nn.Module):
 
 
 
-
-class WeightTriplet(nn.Module): #코드 이상함 이거
+class WeightTriplet(nn.Module):
     """
     Compute contrastive loss
     """
@@ -182,7 +103,8 @@ class WeightTriplet(nn.Module): #코드 이상함 이거
         scores = util.cos_sim(audio_embeds, text_embeds)
         loss = self.polyloss(scores, labels)
         return loss
-    
+
+
 
 class VICReg(nn.Module):
 
@@ -255,6 +177,39 @@ class InfoNCE(nn.Module):
 
 
 
+class InfoNCE_new(nn.Module):
+    #bi-directional loss
+    
+    def __init__(self, temperature=0.07):
+        super(InfoNCE_new, self).__init__()
+        
+        self.tau = temperature
+    
+    def forward(self, audio_embeds, text_embeds, labels=None):
+        """
+        :param audio_embeds: tensor, (N,E)
+        :param text_embeds
+        :param labels(item_batch) # audio-text info
+        :return:
+        """
+        n = audio_embeds.size(0) # 배치 사이즈
+
+        # audio -> text similarity
+        at_similarity_matrix = util.cos_sim(audio_embeds, text_embeds)
+        at_similarity_prob_matrix = F.log_softmax(at_similarity_matrix.exp()/self.tau, dim=-1)
+        at_loss = - at_similarity_prob_matrix.diag().sum()
+
+        # text -> audio similarity
+        ta_similarity_matrix = util.cos_sim(text_embeds, audio_embeds)
+        ta_similarity_prob_matrix = F.log_softmax(ta_similarity_matrix.exp()/self.tau, dim=-1)
+        ta_loss = - ta_similarity_prob_matrix.diag().sum()
+
+        # average the two losses
+        loss = 0.5 * (at_loss + ta_loss)
+
+        return loss / n
+    
+    
 class InfoNCE_VICReg(nn.Module):
     
     def __init__(self, info_weight=1, vic_weight=1):
@@ -262,7 +217,7 @@ class InfoNCE_VICReg(nn.Module):
         
         self.info_weight= info_weight
         self.vic_weight = vic_weight
-        self.InfoNCE = InfoNCE()
+        self.InfoNCE = InfoNCE_new() #InfoNCE()
         self.VICReg = VICReg()
 
     def forward(self, audio_embeds, text_embeds, labels=None):
@@ -271,3 +226,75 @@ class InfoNCE_VICReg(nn.Module):
         loss2 = self.VICReg(audio_embeds, text_embeds)
 
         return self.info_weight * loss1 + self.vic_weight * loss2
+    
+
+
+    
+class TripletLoss(nn.Module): #triplet-sum
+
+    def __init__(self, margin=0.2):
+        super(TripletLoss, self).__init__()
+        self.margin = margin
+
+    def forward(self, audio_embeds, text_embeds, labels):
+        """
+
+        :param audio_embeds:
+        :param text_embeds:
+        :param labels:
+        :return:
+        """
+
+        n = audio_embeds.size(0)  # batch size
+
+        # dist = []
+        sim_a2t = util.cos_sim(audio_embeds, text_embeds)  # (batch_size, x batch_size)
+        sim_ap = torch.diag(sim_a2t).view(n, 1)
+        d1 = sim_ap.expand_as(sim_a2t)
+        d2 = sim_ap.t().expand_as(sim_a2t)
+
+        # compare every diagonal score to scores in its column
+        # caption retrieval
+        cost_s = F.relu(self.margin + sim_a2t - d1)
+        # compare every diagonal score to scores in its row
+        # audio retrieval
+        cost_a = F.relu(self.margin + sim_a2t - d2)
+
+        # clear diagonals
+        mask = labels.expand(n, n).eq(labels.expand(n, n).t()).to(cost_a.device)
+        cost_s = cost_s.masked_fill(mask, 0)
+        cost_a = cost_a.masked_fill(mask, 0)
+
+        cost_s = cost_s.max(1)[0]
+        cost_a = cost_a.max(0)[0]
+
+        loss = (cost_s.sum() + cost_a.sum()) / n
+
+        return loss
+    
+    
+class NTXent(nn.Module):
+
+    def __init__(self, temperature=0.07):
+        super(NTXent, self).__init__()
+        self.loss = nn.LogSoftmax(dim=1)
+        self.tau = temperature
+
+    def forward(self, audio_embeds, text_embeds, labels):
+
+        n = audio_embeds.shape[0]
+
+        a2t = util.cos_sim(audio_embeds, text_embeds) / self.tau
+        t2a = util.cos_sim(text_embeds, audio_embeds) / self.tau
+
+        mask = labels.expand(n, n).eq(labels.expand(n, n).t()).to(a2t.device)
+        mask_diag = mask.diag()
+        mask_diag = torch.diag_embed(mask_diag)
+        mask = mask ^ mask_diag
+
+        a2t_loss = - self.loss(a2t).masked_fill(mask, 0).diag().mean()
+        t2a_loss = - self.loss(t2a).masked_fill(mask, 0).diag().mean()
+
+        loss = 0.5 * a2t_loss + 0.5 * t2a_loss
+
+        return loss

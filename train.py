@@ -13,28 +13,32 @@ if __name__ == '__main__':
     torch.backends.cudnn.enabled = False
 
     parser = argparse.ArgumentParser(description='Settings.')
+    parser.add_argument('-n', '--exp_name', default='exp_name', type=str,
+                        help='Name of the experiment.')
+    parser.add_argument('-d', '--dataset', default='Clotho', type=str,
+                        help='Dataset used')
+    parser.add_argument('-l', '--lr', default=0.0001, type=float,
+                        help='Learning rate')
+    parser.add_argument('-c', '--config', default='settings', type=str,
+                        help='Name of the setting file.')
+    parser.add_argument('-o', '--loss', default='weight', type=str,
+                        help='Name of the loss function.')
+    parser.add_argument('-f', '--freeze', default='False', type=str,
+                        help='Freeze or not.')
+    parser.add_argument('-e', '--batch', default=24, type=int,
+                        help='Batch size.') 
+    parser.add_argument('-m', '--margin', default=0.2, type=float,
+                        help='Margin value for loss')
+    parser.add_argument('-s', '--seed', default=20, type=int,
+                        help='Training seed')
+    parser.add_argument('-p', '--epochs', default=30, type=int,
+                        help='Batch size.')
+    parser.add_argument('-a', '--audio_encoder', default='Cnn14', type=str,
+                        help='audio encoder.')
+    parser.add_argument('-t', '--text_encoder', default='sbert', type=str,
+                        help='text encoder.')
     
-    parser.add_argument('-n', '--exp_name', default='exp_name', type=str, help='Name of the experiment.')
-    
-    parser.add_argument('-d', '--dataset', default='Clotho', type=str, help='Dataset used')
-    
-    parser.add_argument('-l', '--lr', default=0.0001, type=float, help='Learning rate')
-    
-    parser.add_argument('-c', '--config', default='settings', type=str, help='Name of the setting file.')
-    
-    parser.add_argument('-o', '--loss', default='ntxent', type=str, help='Name of the loss function.')
-    
-    parser.add_argument('-f', '--freeze', default='False', type=str, help='Freeze or not.')
-    
-    parser.add_argument('-e', '--batch', default=24, type=int, help='Batch size.')
-    
-    parser.add_argument('-m', '--margin', default=0.2, type=float, help='Margin value for loss.')
-                        
-    parser.add_argument('-s', '--seed', default=20, type=int, help='Training seed')
-                        
-    parser.add_argument('-p', '--epochs',default=50, type=int,help='Epoch')
-    
-    
+
     args = parser.parse_args()
 
     config = get_config(args.config)
@@ -48,5 +52,7 @@ if __name__ == '__main__':
     config.training.margin = args.margin
     config.training.seed = args.seed
     config.training.epochs = args.epochs
+    config.cnn_encoder.model = args.audio_encoder
+    config.text_encoder = args.text_encoder
     
     train(config)
